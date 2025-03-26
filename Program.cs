@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Authentication_with_JWT_and_OAuth.AppDbContext;
 using Authentication_with_JWT_and_OAuth.ApplicationUser;
+using Authentication_with_JWT_and_OAuth.AuthService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -67,6 +68,9 @@ builder.Services.AddSwaggerGen(options =>
         }
     });
 });
+
+builder.Services.AddScoped<ITokenService, TokenService>();
+
 
 builder.Services.AddControllers();
 builder.Services.AddAuthorization();
