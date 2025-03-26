@@ -20,12 +20,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="AuthService\Controllers\" />
       <Folder Include="AuthService\Data\" />
-      <Folder Include="AuthService\DTOs\" />
       <Folder Include="AuthService\Helpers\" />
-      <Folder Include="AuthService\Models\ApplicationUser\" />
-      <Folder Include="AuthService\Services\" />
     </ItemGroup>
 
 </Project>
