@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Authentication_with_JWT_and_OAuth.AuthService.DTOs;
 using Authentication_with_JWT_and_OAuth.AuthService.Services;
+using Authentication_with_JWT_and_OAuth.Dtos;
 
 namespace Authentication_with_JWT_and_OAuth.AuthService.Controllers;
 
@@ -12,48 +13,120 @@ public class AuthController : ControllerBase
     private readonly UserManager<ApplicationUser.ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser.ApplicationUser> _signInManager;
     private readonly ITokenService _tokenService;
+    private readonly IRefreshTokenService _refreshTokenService;
+
 
     public AuthController(
         UserManager<ApplicationUser.ApplicationUser> userManager,
         SignInManager<ApplicationUser.ApplicationUser> signInManager,
-        ITokenService tokenService)
+        ITokenService tokenService,
+        IRefreshTokenService refreshTokenService)
+
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _tokenService = tokenService;
+        _refreshTokenService = refreshTokenService;
+
     }
 
     [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterDto dto)
+    public async Task<IActionResult> Register([FromBody] RegisterDto dto)
     {
+        var userExists = await _userManager.FindByEmailAsync(dto.Email);
+        if (userExists != null)
+            return BadRequest("Användare med denna e-postadress finns redan.");
+
         var user = new ApplicationUser.ApplicationUser
         {
-            UserName = dto.Username,
-            Email = dto.Email
+            Email = dto.Email,
+            UserName = dto.Email // sätt e-post som username också
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);
-
         if (!result.Succeeded)
             return BadRequest(result.Errors);
 
-        await _userManager.AddToRoleAsync(user, "User"); // valfritt
+        await _userManager.AddToRoleAsync(user, "USER");
 
         return Ok("Användare skapad!");
     }
 
+
     [HttpPost("login")]
-    public async Task<IActionResult> Login(LoginDto dto)
+    public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
         var user = await _userManager.FindByEmailAsync(dto.Email);
-        if (user == null) return Unauthorized("Fel email eller lösenord.");
+        if (user == null)
+            return Unauthorized("Felaktig e-post eller lösenord.");
 
         var result = await _signInManager.CheckPasswordSignInAsync(user, dto.Password, false);
-        if (!result.Succeeded) return Unauthorized("Fel email eller lösenord.");
+        if (!result.Succeeded)
+            return Unauthorized("Felaktig e-post eller lösenord.");
 
         var roles = await _userManager.GetRolesAsync(user);
-        var token = _tokenService.CreateToken(user, roles);
 
-        return Ok(new { token });
+        var accessToken = await _tokenService.CreateTokenAsync(user, roles);
+        var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(user);
+
+        Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddDays(7)
+        });
+
+        return Ok(new
+        {
+            accessToken = accessToken
+        });
+
     }
+
+
+
+    [HttpPost("refresh")]
+    public async Task<IActionResult> Refresh()
+    {
+        var tokenFromCookie = Request.Cookies["refreshToken"];
+        if (string.IsNullOrEmpty(tokenFromCookie))
+            return Unauthorized("Ingen refresh-token hittades.");
+
+        var user = await _refreshTokenService.GetUserFromRefreshTokenAsync(tokenFromCookie);
+        if (user == null)
+            return Unauthorized("Ogiltigt eller utgånget refresh-token.");
+
+        var roles = await _userManager.GetRolesAsync(user);
+        var newAccessToken = await _tokenService.CreateTokenAsync(user, roles);
+        var newRefreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(user);
+
+        // Skriv över cookien med nytt refresh-token
+        Response.Cookies.Append("refreshToken", newRefreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddDays(7)
+        });
+
+        return Ok(new
+        {
+            accessToken = newAccessToken
+        });
+    }
+
+
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout([FromBody] RefreshRequestDto request)
+    {
+        var result = await _refreshTokenService.RevokeRefreshTokenAsync(request.RefreshToken);
+
+        if (!result)
+            return BadRequest("Ogiltigt eller redan använt refresh-token.");
+
+        return Ok("Utloggning lyckades. Refresh-token ogiltigförklarad.");
+    }
+
 }

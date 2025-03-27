@@ -1,6 +1,11 @@
-namespace Authentication_with_JWT_and_OAuth.AuthService.Services;
+using Authentication_with_JWT_and_OAuth.ApplicationUser;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
-public interface ITokenService
+namespace Authentication_with_JWT_and_OAuth.AuthService.Services
 {
-    string CreateToken(ApplicationUser.ApplicationUser user, IList<string> roles);
+    public interface ITokenService
+    {
+        Task<string> CreateTokenAsync(ApplicationUser.ApplicationUser user, IList<string> roles);
+    }
 }
