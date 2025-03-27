@@ -3,15 +3,15 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Authentication_with_JWT_and_OAuth.AppDbContext;
 using Authentication_with_JWT_and_OAuth.ApplicationUser;
 using Authentication_with_JWT_and_OAuth.AuthService.Services;
+using Authentication_with_JWT_and_OAuth.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Add Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
@@ -38,6 +38,8 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]))
     };
 });
+
+builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
 // Add Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -71,7 +73,6 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddScoped<ITokenService, TokenService>();
 
-
 builder.Services.AddControllers();
 builder.Services.AddAuthorization();
 
@@ -80,11 +81,29 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// ====== Seed roles ======
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+
+    string[] roleNames = { "USER", "ADMIN" };
+
+    foreach (var roleName in roleNames)
+    {
+        var roleExists = await roleManager.RoleExistsAsync(roleName);
+        if (!roleExists)
+        {
+            await roleManager.CreateAsync(new IdentityRole(roleName));
+        }
+    }
+}
 
 app.Run();
