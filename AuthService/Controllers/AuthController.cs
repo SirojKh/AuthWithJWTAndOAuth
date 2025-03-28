@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Authentication_with_JWT_and_OAuth.AuthService.DTOs;
 using Authentication_with_JWT_and_OAuth.AuthService.Services;
 using Authentication_with_JWT_and_OAuth.Dtos;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Authentication_with_JWT_and_OAuth.AuthService.Controllers;
 
@@ -40,17 +41,35 @@ public class AuthController : ControllerBase
         var user = new ApplicationUser.ApplicationUser
         {
             Email = dto.Email,
-            UserName = dto.Email // sätt e-post som username också
+            UserName = dto.Email
         };
 
         var result = await _userManager.CreateAsync(user, dto.Password);
         if (!result.Succeeded)
             return BadRequest(result.Errors);
 
-        await _userManager.AddToRoleAsync(user, "USER");
+        var isAuthenticated = HttpContext.User.Identity?.IsAuthenticated == true;
+        var isCallerAdmin = HttpContext.User.IsInRole("ADMIN");
+
+        // Tilldela ADMIN endast om:
+        // - Den som registrerar är inloggad
+        // - Den är en admin
+        // - Och den begär isAdmin: true
+        if (isAuthenticated && isCallerAdmin && dto.IsAdmin)
+        {
+            await _userManager.AddToRoleAsync(user, "ADMIN");
+        }
+        else
+        {
+            await _userManager.AddToRoleAsync(user, "USER");
+        }
 
         return Ok("Användare skapad!");
     }
+
+
+
+
 
 
     [HttpPost("login")]
@@ -128,5 +147,6 @@ public class AuthController : ControllerBase
 
         return Ok("Utloggning lyckades. Refresh-token ogiltigförklarad.");
     }
+
 
 }
