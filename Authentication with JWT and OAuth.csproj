@@ -21,7 +21,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="AuthService\Data\" />
       <Folder Include="AuthService\Helpers\" />
     </ItemGroup>
 

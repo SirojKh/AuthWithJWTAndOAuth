@@ -39,9 +39,11 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
+// Services
+builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IRefreshTokenService, RefreshTokenService>();
 
-// Add Swagger
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -71,8 +73,6 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddScoped<ITokenService, TokenService>();
-
 builder.Services.AddControllers();
 builder.Services.AddAuthorization();
 
@@ -91,19 +91,18 @@ app.MapControllers();
 // ====== Seed roles ======
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
-    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
 
     string[] roleNames = { "USER", "ADMIN" };
 
     foreach (var roleName in roleNames)
     {
-        var roleExists = await roleManager.RoleExistsAsync(roleName);
-        if (!roleExists)
+        if (!await roleManager.RoleExistsAsync(roleName))
         {
             await roleManager.CreateAsync(new IdentityRole(roleName));
         }
     }
 }
 
-app.Run();
+// Run as async since we used await above
+await app.RunAsync();
