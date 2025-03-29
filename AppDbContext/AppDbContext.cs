@@ -11,4 +11,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser.ApplicationUser>
 
     public DbSet<RefreshToken> RefreshTokens { get; set; }
 
+    public DbSet<LoginAudit> LoginAudits { get; set; }
+
 }

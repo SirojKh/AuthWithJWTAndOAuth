@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Authentication_with_JWT_and_OAuth.AuthService.DTOs;
 using Authentication_with_JWT_and_OAuth.AuthService.Services;
+using Authentication_with_JWT_and_OAuth.Data;
 using Authentication_with_JWT_and_OAuth.Dtos;
+using Authentication_with_JWT_and_OAuth.Models;
 using Microsoft.AspNetCore.Authorization;
 
 namespace Authentication_with_JWT_and_OAuth.AuthService.Controllers;
@@ -15,19 +17,23 @@ public class AuthController : ControllerBase
     private readonly SignInManager<ApplicationUser.ApplicationUser> _signInManager;
     private readonly ITokenService _tokenService;
     private readonly IRefreshTokenService _refreshTokenService;
+    private readonly AppDbContext _context;
+
 
 
     public AuthController(
         UserManager<ApplicationUser.ApplicationUser> userManager,
         SignInManager<ApplicationUser.ApplicationUser> signInManager,
         ITokenService tokenService,
-        IRefreshTokenService refreshTokenService)
+        IRefreshTokenService refreshTokenService,
+        AppDbContext context)
 
     {
         _userManager = userManager;
         _signInManager = signInManager;
         _tokenService = tokenService;
         _refreshTokenService = refreshTokenService;
+        _context = context;
 
     }
 
@@ -84,10 +90,25 @@ public class AuthController : ControllerBase
             return Unauthorized("Felaktig e-post eller lösenord.");
 
         var roles = await _userManager.GetRolesAsync(user);
-
         var accessToken = await _tokenService.CreateTokenAsync(user, roles);
         var refreshToken = await _refreshTokenService.GenerateRefreshTokenAsync(user);
 
+        // 🕵️‍♂️ AUDIT TRAIL
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "Unknown";
+        var userAgent = Request.Headers["User-Agent"].ToString();
+
+        var audit = new LoginAudit
+        {
+            Email = user.Email,
+            Timestamp = DateTime.UtcNow,
+            IpAddress = ip,
+            UserAgent = userAgent
+        };
+
+        _context.LoginAudits.Add(audit);
+        await _context.SaveChangesAsync();
+
+        // 🍪 Set refresh-token cookie
         Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
         {
             HttpOnly = true,
@@ -100,8 +121,8 @@ public class AuthController : ControllerBase
         {
             accessToken = accessToken
         });
-
     }
+
 
 
 
